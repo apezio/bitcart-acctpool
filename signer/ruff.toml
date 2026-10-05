@@ -1,0 +1,21 @@
+# The lint rules of Bitcart 0.10.3.0 (ref/bitcart/pyproject.toml), so that the signer has the same style.
+target-version = "py312"
+line-length = 127
+
+[lint]
+select = ["F", "E", "I", "UP", "YTT", "B", "T10", "C", "SIM", "RUF100", "RET", "A", "S", "ASYNC", "TID", "T201"]
+preview = true
+unfixable = ["F401"]
+ignore = ["RET502", "RET503", "S104", "S507", "ASYNC110", "ASYNC240", "A005"]
+mccabe = { max-complexity = 12 }
+
+[lint.per-file-ignores]
+# tests: short file reads without a context manager, also in async tests
+"tests/*" = ["S", "SIM115", "SIM108", "ASYNC230"]
+# the command line prints its results
+"acctpool_signer/__main__.py" = ["T201"]
+# a script that prints its result in the image test
+"tests/backend_proof.py" = ["S", "T201"]
+
+[lint.isort]
+known-first-party = ["acctpool_signer"]

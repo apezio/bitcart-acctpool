@@ -1,0 +1,7 @@
+# The one runtime dependency that is not in the base image (SPEC 7.6): libsecp256k1 for eth_keys.
+# Exact version, and the hash of the one wheel for the base image: CPython 3.12, x86_64, musl 1.2 (Alpine).
+# The wheel has libsecp256k1 and the cffi backend inside; it needs no other package.
+# fetch-wheels.sh puts the file into wheels/ (same SHA-256). The install has no network:
+# --offline --no-index --find-links <folder> --require-hashes --no-deps --only-binary :all:
+coincurve==21.0.0 \
+    --hash=sha256:bcc0831f07cb75b91c35c13b1362e7b9dc76c376b27d01ff577bec52005e22a8

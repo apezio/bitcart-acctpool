@@ -1,0 +1,9 @@
+# Test only: postgres and redis in ONE container, so that the integration test has 3 containers plus anvil
+# (signer, database + redis, Bitcart). Built on the test host by scripts/test-integration.sh.
+FROM docker.io/library/postgres:17-alpine
+RUN apk add --no-cache redis
+# redis in the background, then the stock start of postgres
+RUN printf '#!/bin/sh\nredis-server --bind 0.0.0.0 --protected-mode no --save "" --appendonly no --daemonize yes\nexec docker-entrypoint.sh "$@"\n' \
+    > /usr/local/bin/pgredis.sh && chmod +x /usr/local/bin/pgredis.sh
+ENTRYPOINT ["pgredis.sh"]
+CMD ["postgres", "-c", "max_connections=200", "-c", "fsync=off"]

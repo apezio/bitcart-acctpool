@@ -1,0 +1,10 @@
+tests
+**/__pycache__
+**/*.pyc
+.pytest_cache
+fetch-wheels.sh
+.gitignore
+README.md
+THREATS.md
+ruff.toml
+pytest.ini

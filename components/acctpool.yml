@@ -1,0 +1,63 @@
+services:
+  acctpool-signer:
+    restart: unless-stopped
+    image: forked/acctpool-signer:0.1.0
+    # No build key on purpose: backend and worker can see compose/plugins, so the signer source is not there.
+    # Root builds the image by hand from /root/acctpool/signer-src (deploy guide). Compose must not pull or
+    # build it: a missing image is an error, not a download.
+    pull_policy: never
+    environment:
+      ACCTPOOL_CONFIG: /etc/acctpool/pools.toml
+      ACCTPOOL_MASTER_KEY_FILE: /run/acctpool/master.key
+      ACCTPOOL_TOKEN_FILE: /run/acctpool/signer.token
+      ACCTPOOL_DATA: /data
+      ACCTPOOL_HIGHWATER_FILE: /run/acctpool/audit.highwater
+    volumes:
+      - "acctpool_signer_data:/data"
+      # host paths are absolute and outside compose/plugins: backend and worker can read that tree
+      - "/root/acctpool/pools.toml:/etc/acctpool/pools.toml:ro"
+      - "/var/lib/acctpool-key/master.key:/run/acctpool/master.key:ro"
+      - "/root/acctpool/signer.token:/run/acctpool/signer.token:ro"
+      # written by the probe on the host (root, 0644), read by the signer at its start only (SPEC 7.11).
+      # The file must exist before the first start: for a missing source docker makes a folder, and the
+      # signer refuses a folder. Do not add "init: true" to this service: with an init program the seed
+      # commands (init, restore) refuse to run.
+      - "/root/acctpool/audit.highwater:/run/acctpool/audit.highwater:ro"
+    # only this network: no default network means no route to the internet and no route to the other services.
+    # No ports and no expose: the worker reaches port 7070 over acctpool_internal by service name.
+    networks:
+      - acctpool_internal
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # 300 MB is the value that the signer tests used
+    mem_limit: 300m
+    # same value as mem_limit = no swap for this container, so the decrypted seed is never written to a swap device
+    memswap_limit: 300m
+    # no limit for locked memory: the signer then locks its memory (mlockall). With a limit it runs without the lock.
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    cpus: 1.0
+    pids_limit: 128
+    # the root filesystem is read-only; sqlite and the Python tempfile module fall back to /tmp
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    # The audit lines go to stdout. The driver is named, because the size options are options of this driver:
+    # with another default driver of the host the start would fail on them. 5 files of 10 MB at most.
+    # The master copy of the audit lines is in the volume (journal and audit.log), not in this log.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  acctpool_internal:
+    internal: true
+
+volumes:
+  acctpool_signer_data:

@@ -1,0 +1,15 @@
+# /root/acctpool/second.toml (owner: the worker user id, mode 600), mounted read-only into the worker at
+# /run/acctpool/second.toml. ONE independent JSON-RPC URL per chain, from a company that is NOT the provider of
+# the stock Bitcart daemon of that chain. Before every signature (funding, USDT sweep, native sweep) the worker
+# asks it for the chain id and the balance of the address and compares with the daemon (SPEC-v4 4.7).
+# No table for a chain = payouts on that chain wait (event second_opinion_down). The URL is never logged.
+# The URL can hold an API key: treat the file as a secret.
+
+[polygon]
+url = "https://CHANGE_ME"
+
+# [ethereum]
+# url = "https://CHANGE_ME"
+
+# [bnb]
+# url = "https://CHANGE_ME"

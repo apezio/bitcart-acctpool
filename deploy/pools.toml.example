@@ -1,0 +1,123 @@
+# acctpool signer config. EXAMPLE: every value marked REPLACE must be changed.
+#
+# Install as /root/acctpool/pools.toml, owner root, mode 644, in a folder with mode 700.
+# The file has no secret. It is the ONLY place that names payout destinations, token
+# contracts and chain ids. The API and the database cannot change them.
+# The signer reads the file at start. After an edit: restart the signer container and
+# compare "config_sha256" in /v1/status with "sha256sum /root/acctpool/pools.toml".
+#
+# Rules that the signer checks at start (it does not start when one fails):
+# - an unknown key is refused (a wrong spelling of a cap must not become "no cap")
+# - every address has the EIP-55 checksum (mixed case); every chain has family = "evm"
+# - chain ids are unique; a chain name keeps its chain id for all time
+# - store account numbers are unique and not 9000 (9000 is the fee wallet)
+# - every destination names a chain from [chains]
+# - a destination is not the zero address, not an address below 0x10000, not a token
+#   contract and not the fee wallet
+# - max_fund_value <= max_fund_total_per_address <= fee_wallet_daily_cap
+#
+# All amounts are strings of base units (wei). Never a float.
+#
+# Polygon is active. Ethereum and BNB Smart Chain are blocks of comment lines between
+# "BEGIN <chain>" and "END <chain>". To enable a chain, remove the "# " at the start of each
+# line of ALL blocks of that chain (chain, destinations, native destinations, recovery tokens).
+# Enable a chain only in its rollout phase: the signer signs only for chains of this file.
+# The contract addresses are the public USDT contracts of the chain table of the build
+# specification. Every cap value that is marked EXAMPLE is not a measured value.
+
+[signer]
+listen = "0.0.0.0:7070"
+# Rate limits of the signer, all calls with the token. These are the defaults.
+max_signatures_per_minute = 30
+max_derive_per_minute = 10
+max_other_per_minute = 120
+
+# Polygon, chain id 137, USDT with 6 decimals.
+# The caps are the values of the build specification. Fix the final values from the testnet run.
+[chains.polygon]
+family = "evm"
+chain_id = 137
+usdt = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F"
+gas_limit_cap = 150000
+max_fee_per_gas_cap_wei = "2000000000000"
+max_fund_value_wei = "300000000000000000"
+max_fund_total_per_address_wei = "900000000000000000"
+fee_wallet_daily_cap_wei = "20000000000000000000"
+# Gas limit of a native coin payout. 21000 is sufficient when the native destination is a
+# normal address. Make it higher only when the destination is a contract wallet.
+native_gas_limit_cap = 21000
+# A native coin payout is refused when its fee is more than this share of value + fee.
+native_max_fee_share_percent = 10
+
+# --- BEGIN ethereum ---
+# # Ethereum, chain id 1, USDT with 6 decimals. Cap values: EXAMPLE.
+# [chains.ethereum]
+# family = "evm"
+# chain_id = 1
+# usdt = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+# gas_limit_cap = 150000
+# max_fee_per_gas_cap_wei = "100000000000"
+# max_fund_value_wei = "10000000000000000"
+# max_fund_total_per_address_wei = "30000000000000000"
+# fee_wallet_daily_cap_wei = "200000000000000000"
+# native_gas_limit_cap = 21000
+# native_max_fee_share_percent = 10
+# --- END ethereum ---
+
+# --- BEGIN bnb ---
+# # BNB Smart Chain, chain id 56. USDT has 18 decimals on this chain: 500 USDT is
+# # "500000000000000000000". Cap values: EXAMPLE.
+# # Production also needs the Bitcart BNB daemon (component "bnb" of bitcart-docker).
+# [chains.bnb]
+# family = "evm"
+# chain_id = 56
+# usdt = "0x55d398326f99059fF775485246999027B3197955"
+# gas_limit_cap = 150000
+# max_fee_per_gas_cap_wei = "10000000000"
+# max_fund_value_wei = "1500000000000000"
+# max_fund_total_per_address_wei = "4500000000000000"
+# fee_wallet_daily_cap_wei = "50000000000000000"
+# native_gas_limit_cap = 21000
+# native_max_fee_share_percent = 10
+# --- END bnb ---
+
+# One block per store. "account" is the hardened account number in the derivation path
+# m/44'/60'/<account>'/0'/<index>'. NEVER change the account number of a store that has
+# issued addresses: the old addresses are then not reachable with this config.
+[stores.examplestore]
+account = 1
+
+# Where the USDT of this store goes, for each chain. The placeholders are not valid
+# addresses on purpose: the signer refuses to start until a real address is here.
+# Use a wallet that you control. Send a small test amount first.
+[stores.examplestore.destinations]
+polygon = "0xREPLACE_WITH_THE_USDT_PAYOUT_ADDRESS_ON_POLYGON"
+# --- BEGIN ethereum ---
+# ethereum = "0xREPLACE_WITH_THE_USDT_PAYOUT_ADDRESS_ON_ETHEREUM"
+# --- END ethereum ---
+# --- BEGIN bnb ---
+# bnb = "0xREPLACE_WITH_THE_USDT_PAYOUT_ADDRESS_ON_BNB"
+# --- END bnb ---
+
+# Where the native coin of this store goes (POL, ETH, BNB): payments in the native coin
+# and native coin that a USDT payout did not use. Without an entry for a chain, the signer
+# refuses every native coin payout of this store on that chain.
+[stores.examplestore.native_destinations]
+polygon = "0xREPLACE_WITH_THE_POL_PAYOUT_ADDRESS"
+# --- BEGIN ethereum ---
+# ethereum = "0xREPLACE_WITH_THE_ETH_PAYOUT_ADDRESS"
+# --- END ethereum ---
+# --- BEGIN bnb ---
+# bnb = "0xREPLACE_WITH_THE_BNB_PAYOUT_ADDRESS"
+# --- END bnb ---
+
+# Empty in normal operation. A token contract in this list can be swept one time by hand
+# (wrong-asset recovery). Remove the entry after the recovery and restart the signer.
+[recovery_tokens]
+polygon = []
+# --- BEGIN ethereum ---
+# ethereum = []
+# --- END ethereum ---
+# --- BEGIN bnb ---
+# bnb = []
+# --- END bnb ---

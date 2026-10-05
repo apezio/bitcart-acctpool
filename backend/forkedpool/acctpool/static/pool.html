@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Address pool</title>
+<style>
+:root { --bg:#f6f7f9; --card:#fff; --line:#d9dde3; --text:#1c2430; --dim:#5d6878; --accent:#1f5fbf; --bad:#b3261e; --ok:#1b7f3b; }
+@media (prefers-color-scheme: dark) { :root { --bg:#12161c; --card:#1a2029; --line:#2c3542; --text:#e6e9ee; --dim:#9aa5b5; --accent:#7fb0ff; --bad:#ff8a80; --ok:#7ddc9a; } }
+* { box-sizing: border-box; }
+body { margin:0; padding:16px; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, sans-serif; }
+h1 { font-size:20px; margin:0 0 12px; } h2 { font-size:15px; margin:0 0 10px; }
+section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px; margin:0 0 14px; }
+.row { display:flex; flex-wrap:wrap; gap:8px; align-items:end; }
+label { display:flex; flex-direction:column; gap:3px; font-size:12px; color:var(--dim); }
+input, select, button { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
+button { cursor:pointer; background:var(--accent); border-color:var(--accent); color:#fff; }
+button.plain { background:var(--bg); color:var(--text); border-color:var(--line); }
+.scroll { overflow-x:auto; }
+table { border-collapse:collapse; width:100%; font-size:13px; }
+th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+th { color:var(--dim); } .mono { font-family:ui-monospace, monospace; font-size:12px; }
+.bad { color:var(--bad); } .ok { color:var(--ok); } #message { min-height:20px; }
+</style>
+</head>
+<body>
+<h1>Address pool</h1>
+<p id="message" role="status"></p>
+<section>
+  <div class="row">
+    <label>Bitcart token with the permission server_management<input id="token" type="password" size="48" autocomplete="off"></label>
+    <button id="connect">Connect</button>
+  </div>
+</section>
+<div id="app" hidden>
+<section><h2>Status</h2><div id="facts"></div><div class="scroll"><table id="fees"></table></div></section>
+<section>
+  <h2>Settings</h2>
+  <div class="row" id="settings">
+    <label>Ready target<input name="ready_target" size="6"></label>
+    <label>Max. invoice, USD<input name="max_invoice_usd" size="8"></label>
+    <label>Gas price factor<input name="speed_factor" size="6"></label>
+    <button id="save">Save</button>
+  </div>
+</section>
+<section>
+  <h2>Pools</h2>
+  <div class="scroll"><table id="pools"></table></div>
+  <div class="row" id="newpool" style="margin-top:10px">
+    <label>Wallet id<input name="wallet_id" size="28"></label>
+    <label>Chain<select name="chain"><option>polygon</option><option>ethereum</option><option>bnb</option></select></label>
+    <label>Signer store key<input name="store" size="12"></label>
+    <label>Min. withdraw (coins)<input name="min_withdraw" size="8" value="0"></label>
+    <button id="create">Create (not enabled)</button>
+  </div>
+</section>
+<section>
+  <h2>Addresses</h2>
+  <div class="row">
+    <label>Status<select id="status"><option value="">all</option><option>in_invoice</option><option>pending_payout</option>
+      <option>in_payout</option><option>retired</option><option>ready</option></select></label>
+    <label>Balances on<select id="chain"><option value="">(none)</option><option>polygon</option><option>ethereum</option><option>bnb</option></select></label>
+    <button id="show" class="plain">Show</button>
+    <button id="batch">Withdraw all pending and in payout</button>
+  </div>
+  <div class="scroll"><table id="addresses"></table></div>
+</section>
+<section><h2>Address</h2><div class="scroll"><table id="deposits"></table></div><div class="scroll"><table id="payouts"></table></div></section>
+<section><h2>Events</h2><div class="scroll"><table id="events"></table></div></section>
+</div>
+<script>
+"use strict";
+(function () {
+  const base = location.pathname.replace(/\/ui\/?$/, "");
+  const $ = (id) => document.getElementById(id);
+  let token = "";
+  const say = (text, cls) => { $("message").textContent = text || ""; $("message").className = cls || ""; };
+  const el = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = String(text); if (cls) n.className = cls; return n; };
+  const fail = (e) => say(e.message, "bad");
+
+  async function call(method, path, body) {
+    const options = { method, headers: { Authorization: "Bearer " + token }, cache: "no-store", credentials: "omit" };
+    if (body !== undefined) { options.headers["Content-Type"] = "application/json"; options.body = JSON.stringify(body); }
+    const response = await fetch(base + path, options);
+    let data = null;
+    try { data = await response.json(); } catch (e) { /* no JSON */ }
+    if (!response.ok) throw new Error(response.status + ": " + JSON.stringify(data && data.detail !== undefined ? data.detail : response.statusText));
+    return data;
+  }
+
+  function table(id, columns, rows, action) {
+    const target = $(id);
+    target.replaceChildren();
+    const head = el("tr");
+    for (const c of columns) head.append(el("th", c));
+    target.append(head);
+    for (const row of rows) {
+      const line = el("tr");
+      for (const c of columns) {
+        let v = row[c];
+        if (v !== null && typeof v === "object") v = JSON.stringify(v);
+        line.append(el("td", v == null ? "" : v, /address|tx_hash|wallet|key/.test(c) ? "mono" : ""));
+      }
+      if (action) { const cell = el("td"); for (const n of action(row)) cell.append(n); line.append(cell); }
+      target.append(line);
+    }
+  }
+  const button = (text, run, question) => {
+    const b = el("button", text, "plain");
+    b.onclick = () => { if (!question || confirm(question)) run().catch(fail); };
+    return b;
+  };
+
+  async function loadStatus() {
+    const s = await call("GET", "/status");
+    $("facts").replaceChildren(
+      el("p", "Engine: " + (s.engine_alive ? "alive" : "NOT alive"), s.engine_alive ? "ok" : "bad"),
+      el("p", "Signer keystore: " + (s.signer.keystore ? "loaded, seed " + s.signer.seed_id : "NOT loaded"), s.signer.keystore ? "ok" : "bad"),
+      el("p", "Addresses: " + s.addresses.map((a) => a.store + "/" + a.status + " " + a.count).join(", ")));
+    const wallet = (s.signer.fee_wallets || {}).evm || "";
+    table("fees", ["chain", "fee_wallet", "native", "usdt"], Object.entries(s.fee_wallet).map(([chain, b]) => ({ chain, fee_wallet: wallet, ...(b || {}) })));
+    for (const input of $("settings").querySelectorAll("input")) input.value = s.settings[input.name];
+    table("pools", ["id", "wallet_id", "chain", "asset", "store", "enabled", "min_withdraw"], s.pools, (p) => [
+      button(p.enabled ? "Disable" : "Enable", async () => { await call("PATCH", "/pools/" + p.id, { enabled: !p.enabled }); await loadStatus(); },
+        (p.enabled ? "Disable" : "Enable") + " pool mode for wallet " + p.wallet_id + "?"),
+      button("Min. withdraw", async () => {
+        const v = prompt("Minimum withdraw, in coins", p.min_withdraw);
+        if (v) { await call("PATCH", "/pools/" + p.id, { min_withdraw: v.trim() }); await loadStatus(); }
+      })]);
+    table("events", ["id", "created", "kind", "chain", "address", "detail"], await call("GET", "/events?limit=100"));
+  }
+
+  async function loadAddresses() {
+    const q = new URLSearchParams({ limit: 200 });
+    if ($("status").value) q.set("status", $("status").value);
+    if ($("chain").value) q.set("chain", $("chain").value);
+    const page = await call("GET", "/addresses?" + q);
+    table("addresses", ["id", "store", "index", "address", "status", "invoice_id", "assigned_at", "withdraw_requested", "balances"], page.result, (a) => [
+      button("Details", () => loadAddress(a.id)), " ",
+      button("Withdraw", async () => { await call("POST", "/addresses/" + a.id + "/withdraw"); say("The worker pays it out.", "ok"); },
+        "Pay out " + a.address + " now, without the fee rule?")]);
+  }
+
+  async function loadAddress(id) {
+    const a = await call("GET", "/addresses/" + id);
+    table("deposits", ["id", "chain", "asset", "amount", "source", "tx_hash", "from_address", "invoice_id", "credited", "late", "created"], a.deposits);
+    table("payouts", ["id", "chain", "kind", "state", "value", "nonce", "max_fee_wei", "tx_hash", "attempts", "error", "updated"], a.payouts,
+      (p) => ["signed", "broadcast"].includes(p.state) ? [button("Retry", async () => {
+        await call("POST", "/payouts/" + p.id + "/retry"); say("One more try, fee +20%.", "ok"); await loadAddress(id); },
+        "Send payout " + p.id + " again with fee +20% (same nonce)?")] : []);
+  }
+
+  $("connect").onclick = async () => {
+    token = $("token").value.trim().replace(/^Bearer\s+/i, "");
+    try { await loadStatus(); $("app").hidden = false; say("Connected.", "ok"); await loadAddresses(); } catch (e) { $("app").hidden = true; fail(e); }
+  };
+  $("save").onclick = async () => {
+    const body = {};
+    for (const input of $("settings").querySelectorAll("input")) {
+      if (input.value.trim()) body[input.name] = input.name === "ready_target" ? Number(input.value) : input.value.trim();
+    }
+    try { await call("PUT", "/settings", body); say("Saved.", "ok"); await loadStatus(); } catch (e) { fail(e); }
+  };
+  $("create").onclick = async () => {
+    const body = {};
+    for (const input of $("newpool").querySelectorAll("input, select")) if (input.value.trim()) body[input.name] = input.value.trim();
+    try { await call("POST", "/pools", body); say("Pool made. It is not enabled.", "ok"); await loadStatus(); } catch (e) { fail(e); }
+  };
+  $("show").onclick = () => loadAddresses().catch(fail);
+  $("batch").onclick = async () => {
+    if (!confirm("Pay out every address that waits for its payout, without the fee rule?")) return;
+    try { const r = await call("POST", "/withdraw-batch"); say(r.requested + " addresses marked.", "ok"); } catch (e) { fail(e); }
+  };
+})();
+</script>
+</body>
+</html>
