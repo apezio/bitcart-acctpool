@@ -6,3 +6,6 @@ __pycache__/
 secrets/
 *.key
 integration/evm/build/
+*.keystore
+*.password
+.env*
