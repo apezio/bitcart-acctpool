@@ -104,7 +104,8 @@ class Hooks:
             return None, "wallet_asset"
         settings = await db.settings()
         # the cap is in USD; for another invoice currency a rate would decide, and the stock flow is the safe side
-        if str(invoice.currency).upper() != "USD" or Decimal(invoice.price) > Decimal(settings["max_invoice_usd"]):
+        cap = settings["store_max_invoice_usd"].get(pool.store, settings["max_invoice_usd"])
+        if str(invoice.currency).upper() != "USD" or Decimal(invoice.price) > Decimal(cap):
             return None, "over_cap"
         if await db.get_state(STATE_LEADER, ALIVE_SECONDS) is None:
             return None, "engine_not_alive"  # nothing would watch the address or pay it out

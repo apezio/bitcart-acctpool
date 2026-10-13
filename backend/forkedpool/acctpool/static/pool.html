@@ -40,6 +40,7 @@ th { color:var(--dim); } .mono { font-family:ui-monospace, monospace; font-size:
   <div class="row" id="settings">
     <label>Ready target<input name="ready_target" size="6"></label>
     <label>Max. invoice, USD<input name="max_invoice_usd" size="8"></label>
+    <label>Max. invoice per store key, USD (JSON)<input name="store_max_invoice_usd" size="28"></label>
     <label>Gas price factor<input name="speed_factor" size="6"></label>
     <button id="save">Save</button>
   </div>
@@ -120,7 +121,10 @@ th { color:var(--dim); } .mono { font-family:ui-monospace, monospace; font-size:
       el("p", "Addresses: " + s.addresses.map((a) => a.store + "/" + a.status + " " + a.count).join(", ")));
     const wallet = (s.signer.fee_wallets || {}).evm || "";
     table("fees", ["chain", "fee_wallet", "native", "usdt"], Object.entries(s.fee_wallet).map(([chain, b]) => ({ chain, fee_wallet: wallet, ...(b || {}) })));
-    for (const input of $("settings").querySelectorAll("input")) input.value = s.settings[input.name];
+    for (const input of $("settings").querySelectorAll("input")) {
+      const v = s.settings[input.name];
+      input.value = typeof v === "object" ? JSON.stringify(v) : v;
+    }
     table("pools", ["id", "wallet_id", "chain", "asset", "store", "enabled", "min_withdraw"], s.pools, (p) => [
       button(p.enabled ? "Disable" : "Enable", async () => { await call("PATCH", "/pools/" + p.id, { enabled: !p.enabled }); await loadStatus(); },
         (p.enabled ? "Disable" : "Enable") + " pool mode for wallet " + p.wallet_id + "?"),
@@ -157,10 +161,13 @@ th { color:var(--dim); } .mono { font-family:ui-monospace, monospace; font-size:
   };
   $("save").onclick = async () => {
     const body = {};
-    for (const input of $("settings").querySelectorAll("input")) {
-      if (input.value.trim()) body[input.name] = input.name === "ready_target" ? Number(input.value) : input.value.trim();
-    }
-    try { await call("PUT", "/settings", body); say("Saved.", "ok"); await loadStatus(); } catch (e) { fail(e); }
+    const parse = { ready_target: Number, store_max_invoice_usd: JSON.parse };
+    try {
+      for (const input of $("settings").querySelectorAll("input")) {
+        if (input.value.trim()) body[input.name] = (parse[input.name] || String)(input.value.trim());
+      }
+      await call("PUT", "/settings", body); say("Saved.", "ok"); await loadStatus();
+    } catch (e) { fail(e); }
   };
   $("create").onclick = async () => {
     const body = {};

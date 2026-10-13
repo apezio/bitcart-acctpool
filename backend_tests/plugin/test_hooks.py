@@ -142,6 +142,22 @@ async def test_stock_flow(bitcart: Bitcart, client: AsyncClient, token: str, sig
         assert [e.detail["reason"] for e in events] == [case]
 
 
+async def test_store_cap(bitcart: Bitcart, client: AsyncClient, token: str, signer: Any) -> None:
+    """A store key with its own cap replaces max_invoice_usd (500) for that store only."""
+    shop = await helpers.shop(client, token)
+    await helpers.add_ready(bitcart, signer, 2)
+    caps = {"teststore": "1000", "other": "1"}
+    response = await client.put(
+        "/plugins/acctpool/settings", json={"store_max_invoice_usd": caps}, headers=helpers.auth(token)
+    )
+    assert response.json()["store_max_invoice_usd"] == caps
+    pooled = await helpers.invoice(client, token, shop["store"]["id"], price=1000)
+    assert by_wallet(pooled, shop)[0]["payment_address"] != shop["usdt"]["xpub"]
+    stock = await helpers.invoice(client, token, shop["store"]["id"], price=1001)
+    assert by_wallet(stock, shop)[0]["payment_address"] == shop["usdt"]["xpub"]
+    assert [e.detail["reason"] for e in await helpers.events(bitcart, "stock_fallback")] == ["over_cap"]
+
+
 async def test_expired_without_payment_retires_the_address(
     bitcart: Bitcart, client: AsyncClient, token: str, signer: Any
 ) -> None:

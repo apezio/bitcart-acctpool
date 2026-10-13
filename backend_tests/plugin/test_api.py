@@ -47,7 +47,16 @@ async def test_pools_and_settings(bitcart: Bitcart, client: AsyncClient, token: 
     settings = await client.put(
         BASE + "/settings", json={"speed_factor": "1.5", "ready_target": 10}, headers=helpers.auth(token)
     )
-    assert settings.json() == {"ready_target": 10, "max_invoice_usd": "500", "speed_factor": "1.5"}
+    assert settings.json() == {
+        "ready_target": 10,
+        "max_invoice_usd": "500",
+        "store_max_invoice_usd": {},
+        "speed_factor": "1.5",
+    }
+    bad_key = await client.put(
+        BASE + "/settings", json={"store_max_invoice_usd": {"Bad Key": "1"}}, headers=helpers.auth(token)
+    )
+    assert bad_key.status_code == 422
     status = (await client.get(BASE + "/status", headers=helpers.auth(token))).json()
     assert status["settings"]["speed_factor"] == "1.5" and status["engine_alive"] is True
 

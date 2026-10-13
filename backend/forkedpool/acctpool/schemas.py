@@ -17,6 +17,9 @@ def no_float(value: Any) -> Any:
 Amount = Annotated[Decimal, BeforeValidator(no_float), Field(ge=0, max_digits=60, decimal_places=18)]
 
 
+StoreKey = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,31}$")]  # store key of the signer config
+
+
 class Input(Schema):
     model_config = ConfigDict(extra="forbid")
 
@@ -24,7 +27,7 @@ class Input(Schema):
 class PoolCreate(Input):
     wallet_id: str = Field(min_length=1)
     chain: str
-    store: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,31}$")  # store key of the signer config
+    store: StoreKey
     enabled: bool = False
     min_withdraw: Amount = Decimal(0)
 
@@ -39,4 +42,5 @@ class PoolUpdate(Input):
 class Settings(Input):
     ready_target: int | None = Field(None, ge=0, le=1000)
     max_invoice_usd: Amount | None = None
+    store_max_invoice_usd: dict[StoreKey, Amount] | None = None  # replaces the whole map
     speed_factor: Annotated[Decimal, BeforeValidator(no_float), Field(ge=1, le=5)] | None = None

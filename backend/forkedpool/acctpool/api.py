@@ -141,10 +141,16 @@ async def update_pool(pool_id: int, data: schemas.PoolUpdate, session: FromDishk
     return plain(pool)
 
 
+def stored(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: str(v) for k, v in value.items()}
+    return value if isinstance(value, int) else str(value)
+
+
 @router.put("/settings")
 async def put_settings(data: schemas.Settings, session: FromDishka[AsyncSession], user: Any = ADMIN) -> Any:
     current = {**DEFAULT_SETTINGS, **(await state(session, STATE_SETTINGS) or {})}
-    current.update({k: v if isinstance(v, int) else str(v) for k, v in data.model_dump(exclude_none=True).items()})
+    current.update({k: stored(v) for k, v in data.model_dump(exclude_none=True).items()})
     table = models.AcctpoolState
     row = await session.get(table, STATE_SETTINGS, with_for_update=True)
     if row is None:

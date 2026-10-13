@@ -84,5 +84,6 @@ STATE_LEADER = "leader"
 STATE_SIGNER = "signer"
 STATE_SETTINGS = "settings"
 ALIVE_SECONDS = 300
-DEFAULT_SETTINGS = {"ready_target": 50, "max_invoice_usd": "500", "speed_factor": "1.25"}
+# store_max_invoice_usd: {store key: cap}; a store without an entry has max_invoice_usd
+DEFAULT_SETTINGS = {"ready_target": 50, "max_invoice_usd": "500", "store_max_invoice_usd": {}, "speed_factor": "1.25"}
 WATCH_DAYS = 30
